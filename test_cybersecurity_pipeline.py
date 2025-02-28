@@ -42,7 +42,7 @@ def mock_groq_client(monkeypatch):
     def mock_chat_completions_create(*args, **kwargs):
         return MockGroqResponse("nmap, gobuster")
 
-    monkeypatch.setattr("new.client.chat.completions.create", mock_chat_completions_create)
+    monkeypatch.setattr("pipeline.client.chat.completions.create", mock_chat_completions_create)
 
 def test_task_execution_flow(sample_state, mock_groq_client):
     state = task_breakdown(sample_state)
