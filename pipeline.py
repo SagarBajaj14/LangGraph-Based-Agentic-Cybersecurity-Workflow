@@ -67,7 +67,7 @@ def is_target_in_scope(target: str, scope: List[str]) -> bool:
     for item in scope:
         if item.startswith("*."):
             domain = item[2:]
-            if target.endswith(domain):
+            if target.endswith(domain) or target == domain:
                 return True
         elif "/" in item:
             try:
@@ -75,13 +75,13 @@ def is_target_in_scope(target: str, scope: List[str]) -> bool:
                     return True
             except ValueError:
                 continue
-        elif item in target:
+        elif item == target:
             return True
     return False
 
 def extract_target_from_command(command: str) -> str:
     target_pattern = re.compile(
-        r"(https?://[^\s/$.?#].[^\s]*|[\w.-]+\.[a-zA-Z]{2,}|[\d]{1,3}\.[\d]{1,3}\.[\d]{1,3}\.[\d]{1,3})"
+        r"(https?://[^\s/$.?#]+\.[^\s]*|[\w.-]+\.[a-zA-Z]{2,}|[\d]{1,3}\.[\d]{1,3}\.[\d]{1,3}\.[\d]{1,3})"
     )
     match = target_pattern.search(command)
     if match:
@@ -94,6 +94,15 @@ def split_commands(command: str) -> List[str]:
 def task_breakdown(state: SecurityState) -> SecurityState:
     instruction = state["input_instruction"]
     scope = state["scope"]
+
+    target = extract_target_from_command(instruction)
+
+    if target and not is_target_in_scope(target, scope):
+        st.write(f"Target {target} is out of scope! Skipping task breakdown.")
+        state["task_list"] = deque()  
+        state["executed_tasks"] = []  
+        return state
+    
     prompt = f"""
     You are a cybersecurity expert. Break down the following security instruction into an ordered list of actionable penetration testing tasks within the given scope:
     
@@ -117,6 +126,11 @@ def task_breakdown(state: SecurityState) -> SecurityState:
     return state
 
 def fetch_execution_command(task: str, scope: List[str]) -> str:
+
+    target = extract_target_from_command(task)
+    if target and not is_target_in_scope(target, scope):
+        return f"Error: Target {target} is out of scope!"
+        
     prompt = f"""
     You are a cybersecurity automation assistant. Generate the short and concise terminal command needed to execute the following task within the given scope:
     
@@ -247,6 +261,12 @@ def execute_task(state: dict, timeout: int = 10, max_retries: int = 3, max_gener
     original_task = state["original_task"]
 
     command = fetch_execution_command(task, scope).strip("`")
+    if command.startswith("Error:"):
+        st.write(command)
+        executed_tasks.append({"task": task, "result": command})
+        state["executed_tasks"] = executed_tasks
+        return state
+        
     st.write(f"Running command: `{command}`")
 
     dependencies = identify_dependencies(command)
